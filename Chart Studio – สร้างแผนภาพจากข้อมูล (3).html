@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chart Studio – สร้างแผนภาพจากข้อมูล</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f4f5f8;--card:#fff;--tx:#1d2330;--mu:#6b7385;--bd:#d9dde6;--ac:#3b6fe0;--acx:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171f;--card:#1e222d;--tx:#e8eaf0;--mu:#9aa3b5;--bd:#333a4a;--ac:#6e96f5;--acx:#0d1220}}
+:root[data-theme="dark"]{--bg:#14171f;--card:#1e222d;--tx:#e8eaf0;--mu:#9aa3b5;--bd:#333a4a;--ac:#6e96f5;--acx:#0d1220}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:"Sarabun","Noto Sans Thai",system-ui,sans-serif;line-height:1.5}
+.wrap{max-width:1100px;margin:0 auto;padding:16px}
+h1{font-size:1.5rem;margin:.2em 0}
+p.sub{color:var(--mu);margin:0 0 14px}
+.grid{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:14px}
+@media(max-width:820px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px}
+h2{font-size:.95rem;margin:14px 0 6px;color:var(--mu);font-weight:600}
+h2:first-child{margin-top:0}
+.row{display:flex;flex-wrap:wrap;gap:6px}
+button,.btn{font:inherit;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:8px;padding:7px 12px;cursor:pointer}
+button:hover{border-color:var(--ac)}
+button.on{background:var(--ac);color:var(--acx);border-color:var(--ac)}
+button.main{background:var(--ac);color:var(--acx);border-color:var(--ac);font-weight:600;flex:1}
+textarea{width:100%;height:170px;font:13px/1.4 ui-monospace,Menlo,monospace;background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:8px;resize:vertical}
+.hint{font-size:.82rem;color:var(--mu);margin:4px 0}
+#ttl{flex:1;min-width:140px;font:inherit;background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:7px 10px}
+.gwrap{max-height:300px;overflow:auto;border:1px solid var(--bd);border-radius:8px}
+#grid{border-collapse:collapse;width:100%;font-size:.85rem}
+#grid td{border:1px solid var(--bd);padding:0}
+#grid tr.h td{background:var(--bg);color:var(--mu);padding:4px 6px;font-weight:600;position:sticky;top:0;z-index:1;white-space:nowrap}
+#grid td:first-child{padding:0 6px;color:var(--mu);background:var(--bg);text-align:center;white-space:nowrap}
+#grid input{width:100%;min-width:70px;border:0;background:transparent;color:var(--tx);font:inherit;padding:6px}
+#grid input.lab{font-weight:600}
+#grid input:focus{outline:2px solid var(--ac);outline-offset:-2px}
+#grid td button{border:0;padding:2px 8px;color:var(--mu)}
+input[type=file]{font:inherit;font-size:.85rem;max-width:100%}
+.pal{display:flex;height:16px;width:62px;border-radius:4px;overflow:hidden}
+.pal i{flex:1}
+button.p{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 8px;font-size:.78rem}
+button.p.on .pal{outline:2px solid var(--acx)}
+.stage{background:#fff;border-radius:8px;min-height:300px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.stage svg{width:100%;height:auto;display:block}
+.empty{color:#8a91a3;padding:60px 20px;text-align:center}
+#msg{color:#d6453d;font-size:.9rem;margin-top:8px;min-height:1.2em}
+label.sw{display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 4px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>📊 Chart Studio</h1>
+<p class="sub">เลือกชนิดแผนภาพ ใส่ข้อมูลหรืออัปโหลด Excel เลือกโทนสี แล้วกดประมวลผล</p>
+<div class="grid">
+<div class="card">
+<h2>1. เลือกชนิดแผนภาพ</h2>
+<div class="row" id="tabs"></div>
+<h2>2. ใส่ข้อมูล</h2>
+<div class="hint" id="hint"></div>
+<div class="row" style="align-items:center;margin-bottom:8px"><input id="ttl" type="text" maxlength="80" placeholder="ชื่อหัวข้อ (ไทย | English)"><label class="sw"><input type="checkbox" id="showt" checked> แสดงชื่อหัวข้อ</label></div>
+<div class="gwrap"><table id="grid"></table></div>
+<div class="row" style="margin-top:6px" id="gbtn"></div>
+<div class="hint">💡 อยากให้ป้ายสลับภาษาได้ ให้พิมพ์เป็น “ภาษาไทย | English” (คั่นด้วยขีด |) ในชื่อหัวข้อและช่องป้ายชื่อ ถ้าไม่ใส่ | จะแสดงข้อความเดิมในทุกภาษา</div>
+<div class="hint">หรืออัปโหลดไฟล์ Excel/CSV (ใช้ชีตแรก)</div>
+<input type="file" id="file" accept=".xlsx,.xls,.csv">
+<div class="row" style="margin-top:6px"><button id="sample">⬇ ดาวน์โหลดไฟล์ Excel ตัวอย่าง</button></div>
+<h2>3. เลือกโทนสี</h2>
+<div class="row" id="pals"></div>
+<h2>4. ประมวลผล</h2>
+<div class="row"><button class="main" id="go">▶ ประมวลผล</button><button id="reset">↺ Reset</button></div>
+<div id="msg"></div>
+</div>
+<div class="card">
+<div class="bar">
+<label class="sw"><input type="checkbox" id="num" checked> แสดงตัวเลข</label>
+<span class="row" id="lg" style="align-items:center"><span class="hint" style="margin:0">ภาษาในชาร์ต:</span><button data-l="th" class="on">ไทย</button><button data-l="en">English</button></span>
+<button id="png">⬇ บันทึกเป็น PNG</button>
+</div>
+<div class="stage" id="stage"><div class="empty">ยังไม่มีแผนภาพ กด “ประมวลผล” เพื่อสร้าง</div></div>
+</div>
+</div>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const W=700,H=560;
+const PAL={
+"สดใส":["#4e79a7","#f28e2b","#e15759","#76b7b2","#59a14f","#edc948","#b07aa1","#ff9da7"],
+"มหาสมุทร":["#03045e","#0077b6","#00b4d8","#48cae4","#90e0ef"],
+"พาสเทล":["#ffadad","#ffd6a5","#fdffb6","#caffbf","#9bf6ff","#a0c4ff","#bdb2ff"],
+"ไฟร้อน":["#ffd60a","#ff9e00","#ff5400","#d00000","#6a040f"],
+"ป่าไม้":["#d8f3dc","#95d5b2","#52b788","#2d6a4f","#1b4332"],
+"ม่วงชมพู":["#4a148c","#8e24aa","#d81b60","#f06292","#ffcdd2"]
+};
+let pal="สดใส",kind="vor",drawn=false;
+const col=(i,n)=>d3.quantize(d3.interpolateRgbBasis(PAL[pal]),Math.max(n,2))[i];
+const T={
+vor:{n:"Voronoi Treemap",h:"กรอกชื่อและค่าในตาราง แถวละ 1 รายการ (ค่าต้องมากกว่า 0)",s:"ภาคเหนือ | North,120\nภาคอีสาน | Northeast,300\nภาคกลาง | Central,220\nภาคตะวันออก | East,90\nภาคตะวันตก | West,60\nภาคใต้ | South,150\nกรุงเทพฯ | Bangkok,180"},
+chord:{n:"Chord Diagram",h:"ตารางเมทริกซ์: แถวแรกคือชื่อคอลัมน์ (เซลล์ซ้ายบนเว้นว่าง) แถวถัดไปขึ้นต้นด้วยชื่อแถว ตามด้วยค่าการไหล (ต้นทาง → ปลายทาง)",s:",ไทย | Thailand,จีน | China,ญี่ปุ่น | Japan,สหรัฐ | USA,ยุโรป | Europe\nไทย | Thailand,0,30,20,15,10\nจีน | China,25,0,18,22,12\nญี่ปุ่น | Japan,15,20,0,16,8\nสหรัฐ | USA,10,24,14,0,19\nยุโรป | Europe,8,11,9,17,0"},
+rad:{n:"Radial Histogram",h:"กรอกป้ายกำกับและค่าในตาราง แถวละ 1 รายการ",s:"ม.ค. | Jan,32\nก.พ. | Feb,28\nมี.ค. | Mar,45\nเม.ย. | Apr,60\nพ.ค. | May,72\nมิ.ย. | Jun,85\nก.ค. | Jul,90\nส.ค. | Aug,78\nก.ย. | Sep,66\nต.ค. | Oct,50\nพ.ย. | Nov,38\nธ.ค. | Dec,41"},
+gau:{n:"Angular Gauge",h:"กรอกค่าปัจจุบัน ค่าต่ำสุด ค่าสูงสุด และป้ายใต้เข็ม ในแถวเดียว",s:"72,0,100,ความพึงพอใจ (%) | Satisfaction (%)"}
+};
+// UI
+Object.entries(T).forEach(([k,v])=>{const b=document.createElement("button");b.textContent=v.n;b.dataset.k=k;b.onclick=()=>setKind(k);$("#tabs").append(b)});
+Object.entries(PAL).forEach(([k,c])=>{const b=document.createElement("button");b.className="p";b.dataset.k=k;b.innerHTML=`<span class="pal">${c.map(x=>`<i style="background:${x}"></i>`).join("")}</span>${k}`;b.onclick=()=>{pal=k;mark();if(drawn)run()};$("#pals").append(b)});
+function mark(){document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.k==kind));document.querySelectorAll("#pals button").forEach(b=>b.classList.toggle("on",b.dataset.k==pal))}
+let grid=[];
+const DT={vor:"ยอดขายแยกตามภาค | Sales by Region",chord:"การไหลระหว่างกลุ่ม | Flow Between Groups",rad:"ปริมาณรายเดือน | Monthly Volume",gau:"ตัวชี้วัดความพึงพอใจ | Satisfaction Index"};
+function markL(){document.querySelectorAll("#lg button").forEach(b=>b.classList.toggle("on",b.dataset.l==lang))}
+document.querySelectorAll("#lg button").forEach(b=>b.onclick=()=>{lang=b.dataset.l;markL();if(drawn)run()});
+$("#showt").onchange=()=>{if(drawn)run()};
+$("#ttl").oninput=()=>{if(drawn)run()};
+const HD={vor:["ชื่อ","ค่า"],rad:["ป้ายกำกับ","ค่า"],gau:["ค่าปัจจุบัน","ต่ำสุด","สูงสุด","ป้ายใต้เข็ม"]};
+function setKind(k){kind=k;$("#ttl").value=DT[k];$("#hint").textContent=T[k].h;grid=rows(T[k].s);renderGrid();$("#msg").textContent="";mark()}
+function renderGrid(){
+const t=$("#grid"),ch=kind=="chord";t.innerHTML="";
+const nc=Math.max(...grid.map(r=>r.length),HD[kind]?HD[kind].length:1);
+grid=grid.map(r=>{r=r.slice();while(r.length<nc)r.push("");return r});
+const hr=t.insertRow();hr.className="h";hr.insertCell().textContent="#";
+for(let c=0;c<nc;c++)hr.insertCell().textContent=HD[kind]?(HD[kind][c]||""):(c==0?"ชื่อแถว ↓ / คอลัมน์ →":"คอลัมน์ "+c);
+hr.insertCell();
+grid.forEach((r,i)=>{const tr=t.insertRow();tr.insertCell().textContent=ch?(i?i:"หัว"):i+1;
+r.forEach((v,c)=>{const inp=document.createElement("input");inp.value=v;if(ch&&(i==0||c==0))inp.className="lab";inp.oninput=()=>{grid[i][c]=inp.value};tr.insertCell().append(inp)});
+const td=tr.insertCell();if(kind!="gau"&&!(ch&&i==0)){const b=document.createElement("button");b.textContent="×";b.title="ลบ";b.onclick=()=>delRow(i);td.append(b)}});
+const gb=$("#gbtn");gb.innerHTML="";
+if(kind!="gau"){const b=document.createElement("button");b.textContent=ch?"+ เพิ่มรายการ (แถว+คอลัมน์)":"+ เพิ่มแถว";b.onclick=addRow;gb.append(b)}}
+function addRow(){const nc=grid[0]?grid[0].length:2;
+if(kind=="chord"){grid.forEach((r,i)=>r.push(i==0?"ใหม่":"0"));grid.push(["ใหม่"].concat(Array(nc).fill("0")))}else grid.push(Array(nc).fill(""));renderGrid()}
+function delRow(i){if(kind=="chord"){if(grid.length<=3)return;grid.splice(i,1);grid.forEach(r=>r.splice(i,1))}else{if(grid.length<=1)return;grid.splice(i,1)}renderGrid()}
+function loadRows(a){a=a.map(r=>r.map(c=>String(c??"").trim())).filter(r=>r.some(c=>c));
+if(!a.length)throw new Error("ไฟล์ไม่มีข้อมูล");
+if(kind!="chord"&&!isFinite(parseFloat(a[0][kind=="gau"?0:1])))a.shift();
+if(!a.length)throw new Error("ไฟล์ไม่มีข้อมูล");
+const w=kind=="chord"?Math.max(...a.map(r=>r.length)):HD[kind].length;
+grid=a.map(r=>{r=r.slice(0,w);while(r.length<w)r.push("");return r});renderGrid()}
+function getRows(){const r=grid.map(x=>x.map(s=>s.trim()));return kind=="chord"?r:r.filter(x=>x.some(c=>c))}
+$("#sample").onclick=async()=>{
+const a=rows(T[kind].s).map(r=>r.map(v=>v!==""&&isFinite(v)?+v:v)),data=HD[kind]?[HD[kind],...a]:a;
+const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(data),"Data");
+const blob=new Blob([XLSX.write(wb,{bookType:"xlsx",type:"array"})],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),name="sample-"+kind+".xlsx";
+try{const d=await claude.use("downloads");if(d)await d.save({filename:name,data:blob});else{const l=document.createElement("a");l.href=URL.createObjectURL(blob);l.download=name;l.click()}}catch(e){if(e&&e.code!=="declined")$("#msg").textContent="ดาวน์โหลดไม่สำเร็จ"}};
+$("#file").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{if(/\.csv$/i.test(f.name))loadRows(rows(await f.text()));else{const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});loadRows(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:""}))}$("#msg").textContent=""}catch(err){$("#msg").textContent="อ่านไฟล์ไม่สำเร็จ: "+err.message}};
+$("#go").onclick=run;
+$("#num").onchange=()=>{if(drawn)run()};
+$("#reset").onclick=()=>{pal="สดใส";$("#file").value="";$("#num").checked=true;$("#showt").checked=true;lang="th";markL();drawn=false;$("#stage").innerHTML='<div class="empty">ยังไม่มีแผนภาพ กด “ประมวลผล” เพื่อสร้าง</div>';setKind(kind)};
+let pngBlob=null;
+function mkPng(){return new Promise((res,rej)=>{const svg=$("#svg");if(!svg)return rej(new Error("ยังไม่มีแผนภาพ"));
+const s=svg.cloneNode(true);s.setAttribute("width",W*2);s.setAttribute("height",H*2);
+const xml=new XMLSerializer().serializeToString(s),img=new Image();
+img.onload=()=>{try{const c=document.createElement("canvas");c.width=W*2;c.height=H*2;const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);c.toBlob(b=>b?res(b):rej(new Error("สร้างไฟล์ภาพไม่สำเร็จ")),"image/png")}catch(e){rej(e)}};
+img.onerror=()=>rej(new Error("โหลดภาพชาร์ตไม่สำเร็จ"));
+img.src="data:image/svg+xml;base64,"+btoa(unescape(encodeURIComponent(xml)))})}
+$("#png").onclick=async()=>{
+const m=$("#msg");m.textContent="";
+if(!$("#svg")){m.textContent="ยังไม่มีแผนภาพให้บันทึก กด “ประมวลผล” ก่อน";return}
+try{const blob=pngBlob||await mkPng(),name="chart-"+kind+".png";
+let d=null;try{d=await claude.use("downloads")}catch(e){}
+if(d)await d.save({filename:name,data:blob});else{const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click()}
+}catch(e){if(!e||e.code!=="declined")m.textContent="บันทึกไม่สำเร็จ: "+((e&&e.message)||e)}};
+// parsing
+const rows=t=>t.split(/\r?\n/).filter(l=>l.trim()).map(l=>l.split(/[,\t]/).map(s=>s.trim()));
+function run(){
+$("#msg").textContent="";
+try{
+const st=$("#stage");st.innerHTML="";
+const svg=d3.select(st).append("svg").attr("id","svg").attr("viewBox",`0 0 ${W} ${H}`).attr("xmlns","http://www.w3.org/2000/svg").style("font-family","sans-serif");
+svg.append("rect").attr("width",W).attr("height",H).attr("fill","#fff");
+const tt=$("#showt").checked&&L($("#ttl").value.trim());
+const g=svg.append("g").attr("transform",`translate(${W/2},${H/2+(tt?24:0)}) scale(${tt?.9:1})`);
+if(tt)svg.append("text").attr("x",W/2).attr("y",38).attr("text-anchor","middle").attr("font-size",Math.max(14,Math.min(26,640/(tt.length*.62)))).attr("font-weight",700).attr("fill","#1d2330").text(tt);
+const show=$("#num").checked,r=getRows();
+({vor:vor,chord:chordD,rad:radial,gau:gauge})[kind](g,r,show);
+drawn=true;pngBlob=null;{const cur=$("#svg");mkPng().then(b=>{if($("#svg")===cur)pngBlob=b}).catch(()=>{})}
+}catch(e){$("#msg").textContent="เกิดข้อผิดพลาด: "+e.message;console.error(e)}}
+const txt=(g,t,x,y,s,a="middle",c="#222",w=400)=>g.append("text").attr("x",x).attr("y",y).attr("text-anchor",a).attr("font-size",s).attr("font-weight",w).attr("fill",c).style("paint-order","stroke").attr("stroke","#fff").attr("stroke-width",2.5).attr("stroke-linejoin","round").text(t);
+const nf=d3.format(",.2~f");
+let lang="th";const L=s=>{const p=String(s).split("|").map(x=>x.trim());return p.length>1?(lang=="en"?(p[1]||p[0]):(p[0]||p[1])):p[0]};
+// Voronoi treemap (power diagram + weight iteration)
+function clip(p,a,b,c){const o=[];for(let i=0;i<p.length;i++){const u=p[i],v=p[(i+1)%p.length],du=a*u[0]+b*u[1]-c,dv=a*v[0]+b*v[1]-c;if(du<=0)o.push(u);if(du*dv<0){const t=du/(du-dv);o.push([u[0]+t*(v[0]-u[0]),u[1]+t*(v[1]-u[1])])}}return o}
+const ar=p=>{let s=0;for(let i=0;i<p.length;i++){const q=p[(i+1)%p.length];s+=p[i][0]*q[1]-q[0]*p[i][1]}return s/2};
+function cen(p){const a=ar(p);let x=0,y=0;for(let i=0;i<p.length;i++){const q=p[(i+1)%p.length],f=p[i][0]*q[1]-q[0]*p[i][1];x+=(p[i][0]+q[0])*f;y+=(p[i][1]+q[1])*f}return[x/(6*a),y/(6*a)]}
+function hw(p,y,x0){const xs=[];for(let i=0;i<p.length;i++){const u=p[i],v=p[(i+1)%p.length];if((u[1]-y)*(v[1]-y)<0)xs.push(u[0]+(y-u[1])/(v[1]-u[1])*(v[0]-u[0]))}xs.sort((a,b)=>a-b);for(let i=0;i+1<xs.length;i+=2)if(x0>=xs[i]&&x0<=xs[i+1])return xs[i+1]-xs[i];return 0}
+function vor(g,r,show){
+const d=r.map(x=>({k:L(x[0]),v:+x[1]})).filter(x=>x.v>0);
+if(d.length<2)throw new Error("ต้องมีข้อมูลอย่างน้อย 2 รายการ และค่ามากกว่า 0");
+const R=255,n=d.length,A=Math.PI*R*R,tot=d3.sum(d,x=>x.v),tg=d.map(x=>x.v/tot*A);
+const circ=d3.range(90).map(i=>{const t=i/90*2*Math.PI;return[R*Math.cos(t),R*Math.sin(t)]});
+let S=d.map((_,i)=>{const t=i*2.4,q=R*.7*Math.sqrt((i+.5)/n);return[q*Math.cos(t),q*Math.sin(t)]}),Wt=d.map(()=>0),P=[];
+for(let it=0;it<160;it++){
+P=S.map((s,i)=>{let p=circ;for(let j=0;j<n&&p.length;j++){if(j==i)continue;p=clip(p,2*(S[j][0]-s[0]),2*(S[j][1]-s[1]),S[j][0]**2+S[j][1]**2-s[0]**2-s[1]**2+Wt[i]-Wt[j])}return p});
+P.forEach((p,i)=>{const a=p.length>2?Math.abs(ar(p)):0;Wt[i]+=(tg[i]-a)/A*R*R*.6;if(p.length>2&&a>1){const c=cen(p);S[i]=[S[i][0]+(c[0]-S[i][0])*.35,S[i][1]+(c[1]-S[i][1])*.35]}})}
+P.forEach((p,i)=>{if(p.length<3)return;
+g.append("path").attr("d","M"+p.map(q=>q.join(",")).join("L")+"Z").attr("fill",col(i,n)).attr("stroke","#fff").attr("stroke-width",2.5);
+const c=cen(p),lum=d3.hsl(col(i,n)).l,tc=lum>.6?"#222":"#fff",hc=lum>.6?"#fff":"#000";
+const val=nf(d[i].v),len=Math.max(d[i].k.length,show?val.length:0);
+const wd=Math.min(hw(p,c[1],c[0]),hw(p,c[1]-9,c[0]),hw(p,c[1]+9,c[0]));
+let fs=Math.min(20,wd*.85/(len*.6)),lab=d[i].k;
+if(fs<9){fs=9;const mx=Math.floor(wd*.85/(fs*.6));lab=mx>=4?lab.slice(0,mx-1)+"…":lab.slice(0,Math.max(mx,0))}
+if(!lab)return;
+const t=g.append("text").attr("text-anchor","middle").attr("fill",tc).attr("font-size",fs).attr("font-weight",600).attr("stroke",hc).attr("stroke-width",2.5).attr("stroke-linejoin","round").style("paint-order","stroke");
+t.append("tspan").attr("x",c[0]).attr("y",c[1]-(show?2:-fs/3)).text(lab);
+if(show&&wd*.85>=val.length*fs*.6)t.append("tspan").attr("x",c[0]).attr("dy",fs*1.15).attr("font-weight",400).text(val)});
+g.append("circle").attr("r",R).attr("fill","none").attr("stroke","#fff").attr("stroke-width",3)}
+// Chord
+function chordD(g,r,show){
+const names=r[0].slice(1).map(L),m=r.slice(1).map(x=>x.slice(1).map(v=>+v||0));
+if(names.length<2||m.length!==names.length)throw new Error("เมทริกซ์ต้องเป็นสี่เหลี่ยมจัตุรัส (จำนวนแถว = จำนวนคอลัมน์)");
+const n=names.length,oR=205,iR=oR-14,ch=d3.chord().padAngle(.05).sortSubgroups(d3.descending)(m);
+g.append("g").attr("fill-opacity",.75).selectAll("path").data(ch).join("path").attr("d",d3.ribbon().radius(iR-2)).attr("fill",d=>col(d.source.index,n)).attr("stroke","#fff").attr("stroke-width",.6)
+.append("title").text(d=>`${names[d.source.index]} → ${names[d.target.index]}: ${d.source.value}`);
+g.append("g").selectAll("path").data(ch.groups).join("path").attr("d",d3.arc().innerRadius(iR).outerRadius(oR)).attr("fill",d=>col(d.index,n));
+ch.groups.forEach(d=>{const a=(d.startAngle+d.endAngle)/2,fl=a>Math.PI;
+const t=g.append("text").attr("transform",`rotate(${a*180/Math.PI-90}) translate(${oR+8},0)${fl?" rotate(180)":""}`).attr("text-anchor",fl?"end":"start").attr("dy","0.35em").attr("font-size",14).attr("fill","#222");
+t.append("tspan").text(names[d.index]);if(show)t.append("tspan").attr("fill","#667").attr("font-size",12).text("  "+nf(d.value))})}
+// Radial histogram
+function radial(g,r,show){
+const d=r.map(x=>({k:L(x[0]),v:+x[1]})).filter(x=>isFinite(x.v));
+if(!d.length)throw new Error("ไม่พบข้อมูลตัวเลข");
+const iR=70,oR=215,x=d3.scaleBand().domain(d.map(e=>e.k)).range([0,2*Math.PI]),y=d3.scaleRadial().domain([0,d3.max(d,e=>e.v)||1]).range([iR,oR]);
+[.25,.5,.75,1].forEach(t=>g.append("circle").attr("r",y(t*(y.domain()[1]))).attr("fill","none").attr("stroke","#e3e6ee").attr("stroke-dasharray","3 3"));
+const arc=d3.arc().innerRadius(iR).outerRadius(e=>y(Math.max(e.v,0))).startAngle(e=>x(e.k)).endAngle(e=>x(e.k)+x.bandwidth()).padAngle(.015).padRadius(iR);
+g.selectAll(".b").data(d).join("path").attr("d",arc).attr("fill",(e,i)=>col(i,d.length));
+d.forEach(e=>{const a=x(e.k)+x.bandwidth()/2,fl=a>Math.PI;
+g.append("text").attr("transform",`rotate(${a*180/Math.PI-90}) translate(${oR+8},0)${fl?" rotate(180)":""}`).attr("text-anchor",fl?"end":"start").attr("dy","0.35em").attr("font-size",13).attr("fill","#222").text(e.k);
+if(show){const q=y(Math.max(e.v,0))+12;txt(g,nf(e.v),q*Math.sin(a),-q*Math.cos(a)+4,11,"middle","#222",600)}})}
+// Gauge
+function gauge(g,r,show){
+const [v,lo,hi,title]=[+r[0][0],+(r[0][1]??0),+(r[0][2]??100),L(r[0][3]||"")];
+if(![v,lo,hi].every(isFinite)||hi<=lo)throw new Error("รูปแบบ: ค่า,ต่ำสุด,สูงสุด,ชื่อ (สูงสุดต้องมากกว่าต่ำสุด)");
+const A0=-Math.PI*.75,A1=Math.PI*.75,sc=d3.scaleLinear().domain([lo,hi]).range([A0,A1]).clamp(true),R=210,iR=140,N=5;
+g.attr("transform",`translate(${W/2},${H/2+20})`);
+for(let i=0;i<N;i++)g.append("path").attr("d",d3.arc().innerRadius(iR).outerRadius(R).startAngle(A0+(A1-A0)*i/N).endAngle(A0+(A1-A0)*(i+1)/N).padAngle(.012)()).attr("fill",col(i,N));
+const ticks=d3.ticks(lo,hi,10);
+ticks.forEach(t=>{const a=sc(t);g.append("line").attr("x1",(R+3)*Math.sin(a)).attr("y1",-(R+3)*Math.cos(a)).attr("x2",(R+10)*Math.sin(a)).attr("y2",-(R+10)*Math.cos(a)).attr("stroke","#666");
+if(show)txt(g,nf(t),(R+24)*Math.sin(a),-(R+24)*Math.cos(a)+4,12,"middle","#444")});
+const ang=sc(v)*180/Math.PI;
+g.append("path").attr("d","M-9,0 L0,-"+(iR-8)+" L9,0 Z").attr("fill","#222").attr("transform",`rotate(${ang})`);
+g.append("circle").attr("r",16).attr("fill","#222");g.append("circle").attr("r",6).attr("fill","#fff");
+txt(g,title,0,95,22,"middle","#333",600);
+if(show)txt(g,nf(v),0,145,44,"middle","#111",700)}
+setKind("vor");
+</script>
+</body>
+</html>
